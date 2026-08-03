@@ -48,4 +48,28 @@
 
 2. Update `app.ts` to `src/app.ts` in `package.json` file.
 
+## Run the app:
 
+```sh
+# step 1:
+> pnpm run dev
+
+# output
+$ node src/app.ts
+Server listening on PORT 3000
+
+# step 2:
+> curl -i localhost:3000/health
+
+# output:
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 15
+ETag: W/"f-VaSQ4oDUiZblZNAEkkN+sX+q3Sg"
+Date: Mon, 03 Aug 2026 03:46:02 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"status":"ok"}
+```
