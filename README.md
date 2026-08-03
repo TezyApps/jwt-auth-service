@@ -36,3 +36,16 @@
   }
 }
 ```
+
+### Create entry file
+
+1. Make `app.ts` file
+
+```sh
+> mkdir src
+> touch src/app.ts
+```
+
+2. Update `app.ts` to `src/app.ts` in `package.json` file.
+
+
