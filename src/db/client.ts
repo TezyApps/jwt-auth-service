@@ -3,6 +3,7 @@ import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
 import dotenv from 'dotenv';
 dotenv.config();
+console.log('DEBUG', process.env.NODE_ENV, process.env.DYNAMODB_ENDPOINT);
 
 let config: DynamoDBClientConfig = {};
 
@@ -11,11 +12,11 @@ if (process.env.NODE_ENV === 'local') {
         'region': 'local',
         'endpoint': process.env.DYNAMODB_ENDPOINT,
         'credentials': {
-            'accessKeyId': 'local-access',
-            'secretAccessKey': 'local-secret-access'
+            'accessKeyId': 'localaccesskeyid',
+            'secretAccessKey': 'secretaccesskey'
         }
     };
 }
 
-export const client = new DynamoDBClient(config);
-export const docClient = DynamoDBDocumentClient.from(client);
+export const dbClient = new DynamoDBClient(config);
+export const docClient = DynamoDBDocumentClient.from(dbClient);
