@@ -1,6 +1,9 @@
 import express from 'express';
 import { type Express, type Request, type Response } from 'express';
 
+import dotenv from 'dotenv';
+dotenv.config();
+
 const app: Express = express();
 
 app.get(
@@ -13,8 +16,8 @@ app.get(
 );
 
 app.listen(
-    3000,
+    process.env.PORT,
     () => { 
-        console.log('Server listening on PORT 3000');
+        console.log('Server listening on PORT ' + process.env.PORT);
     }
 );
