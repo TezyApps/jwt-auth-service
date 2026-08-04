@@ -1,12 +1,9 @@
 
-import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { ScanCommand } from "@aws-sdk/client-dynamodb";
-
+import { ScanCommand, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { docClient } from "../db/client.ts";
-
 import { type User, Tables } from "../models/types.ts";
 
-async function listUsers() {
+export async function listUsers(): Promise<User[]> {
     const command = new ScanCommand(
         { TableName: Tables.users }
     );
@@ -14,12 +11,14 @@ async function listUsers() {
     try { 
         const response = await docClient.send(command);
         console.log(response);
+        return (response.Items as User[]) || [];
     } catch(error) { 
         console.error("Error fetching Users table", error);
+        throw error;
     }
 }
 
-async function createUser(email: string, hashedPassword: string) { 
+export async function createUser(email: string, hashedPassword: string) { 
     const user: User = { 
         email: email,
         hashedPassword: hashedPassword
@@ -37,10 +36,11 @@ async function createUser(email: string, hashedPassword: string) {
         console.log('User added sucessfully', email, response);
     } catch(error) { 
         console.error('Error inserting record', email);
+        throw error;
     }
 }
 
-async function getUserByEmail(email: string) {
+export async function getUserByEmail(email: string): Promise<User | undefined> {
     const command = new GetCommand(
         {
             TableName: Tables.users,
@@ -53,7 +53,9 @@ async function getUserByEmail(email: string) {
     try { 
         const res = await docClient.send(command);
         console.log('Fetched user by email', res.Item);
+        return res.Item as User;
     } catch (error) {
         console.error(`Error fetching user by email: ${email}`, error);
+        throw error
     }
 }
