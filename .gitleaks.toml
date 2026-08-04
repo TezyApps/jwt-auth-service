@@ -1,0 +1,10 @@
+title = "jwt-auth-service gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "pem-private-key"
+description = "PEM-encoded private key block"
+regex = '''-----BEGIN[ A-Z0-9_-]{0,100}PRIVATE KEY( BLOCK)?-----'''
+tags = ["key", "private-key"]
