@@ -1,15 +1,38 @@
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
-import { createUser } from "./user.repo.ts";
+import { createUser, getUserByEmail } from "./user.repo.ts";
+import { ErrorCode } from "../models/types.js";
 
 export async function registerNewUser(email: string, password: string) {
-    const registerSchema = z.object(
+    const { email: validEmail, password: validPassword } = validateSchema(email, password);
+    
+    // hash password
+    const hashedPassword = await bcrypt.hash(validPassword, 10);
+    await createUser(validEmail, hashedPassword);
+}
+
+export async function login(email: string, password: string) { 
+    const { email: validEmail, password: validPassword } = validateSchema(email, password);
+    const user = await getUserByEmail(validEmail);
+    if (!user) { 
+        throw new Error(ErrorCode.loginInvalidCredentials);
+    }
+    const canLogin = await bcrypt.compare(validPassword, user.hashedPassword);
+    if (!canLogin) { 
+        throw new Error(ErrorCode.loginInvalidCredentials);
+    }
+
+    // todo: issue jsonwebtoken | JWT
+}
+
+function validateSchema(email: string, password: string): {email: string, password: string} { 
+    const schema = z.object(
         {
             email: z.email(),
             password: z.string().min(8)
         }
     );
-    const validated = registerSchema.safeParse({email, password});
+    const validated = schema.safeParse({email, password});
 
     if (!validated.success) { 
         throw new Error(
@@ -18,10 +41,8 @@ export async function registerNewUser(email: string, password: string) {
                 .join(", ")
         );
     }
-
-    const { email: validEmail, password: validPassword } = validated.data;
-    
-    // hash password
-    const hashedPassword = await bcrypt.hash(validPassword, 10);
-    await createUser(validEmail, hashedPassword);
+    return {
+        email: validated.data.email, 
+        password: validated.data.password
+    };
 }
