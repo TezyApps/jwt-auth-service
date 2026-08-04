@@ -1,5 +1,7 @@
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import { z } from 'zod';
+
 import { createUser, getUserByEmail } from "./user.repo.ts";
 import { ErrorCode } from "../models/types.js";
 
@@ -11,7 +13,8 @@ export async function registerNewUser(email: string, password: string) {
     await createUser(validEmail, hashedPassword);
 }
 
-export async function login(email: string, password: string) { 
+export async function login(email: string, password: string): Promise<string> { 
+    
     const { email: validEmail, password: validPassword } = validateSchema(email, password);
     const user = await getUserByEmail(validEmail);
     if (!user) { 
@@ -22,7 +25,13 @@ export async function login(email: string, password: string) {
         throw new Error(ErrorCode.loginInvalidCredentials);
     }
 
-    // todo: issue jsonwebtoken | JWT
+    const token = jwt.sign(
+        { validEmail },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+    )
+
+    return token;
 }
 
 function validateSchema(email: string, password: string): {email: string, password: string} { 

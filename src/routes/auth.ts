@@ -40,7 +40,10 @@ authRouter.post(
     async (req: Request, res: Response) => { 
         const { email, password } = req.body;
         try { 
-            await login(email, password);
+            const jwt = await login(email, password);
+            res.status(200).json(
+                { 'token': jwt }
+            );
         } catch (error) { 
             if (error instanceof Error && error.message === ErrorCode.loginInvalidCredentials) { 
                 console.error(`401 => Invalid credentials for user: ${email}`);

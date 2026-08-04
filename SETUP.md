@@ -67,6 +67,12 @@ JWT_SECRET=replace-with-a-real-random-secret
 PORT=3000
 ```
 
+### How to generate a JWT secret key?
+
+```sh
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
 Do not commit `.env` — add it to `.gitignore` immediately, before your first commit.
 
 ## Why DynamoDB Local instead of an in-memory store
