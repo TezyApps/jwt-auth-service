@@ -52,7 +52,7 @@ export async function getUserByEmail(email: string): Promise<User | undefined> {
 
     try { 
         const res = await docClient.send(command);
-        console.log('Fetched user by email', res.Item);
+        console.log('Fetched user by email :', email);
         return res.Item as User;
     } catch (error) {
         console.error(`Error fetching user by email: ${email}`, error);

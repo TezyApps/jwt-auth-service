@@ -40,9 +40,9 @@ authRouter.post(
     async (req: Request, res: Response) => { 
         const { email, password } = req.body;
         try { 
-            const jwt = await login(email, password);
+            const token = await login(email, password);
             res.status(200).json(
-                { 'token': jwt }
+                { 'accessToken': token }
             );
         } catch (error) { 
             if (error instanceof Error && error.message === ErrorCode.loginInvalidCredentials) { 

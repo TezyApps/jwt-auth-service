@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 
 import { createUser, getUserByEmail } from "./user.repo.ts";
-import { ErrorCode } from "../models/types.js";
+import { ErrorCode } from "../models/types.ts";
 
 export async function registerNewUser(email: string, password: string) {
     const { email: validEmail, password: validPassword } = validateSchema(email, password);
@@ -26,7 +26,7 @@ export async function login(email: string, password: string): Promise<string> {
     }
 
     const token = jwt.sign(
-        { validEmail },
+        { email: validEmail },
         process.env.JWT_SECRET,
         { expiresIn: '1h' }
     )
