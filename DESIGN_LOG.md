@@ -53,6 +53,21 @@ One entry per thing that broke and what changed, per PLAN.md.
 - Confirmed both credential-failure branches (email not found, wrong password) throw the identical error and produce the identical `401 { error: "Invalid credentials" }` response — satisfies PLAN.md's "don't leak which one failed" requirement.
 - Hit a stale-server issue while manually verifying: `curl` returned `404 Cannot POST /auth/login` even though the route existed in source. Root cause: the `dev` script (`node src/app.ts`) has no file-watching, and the running process predated the route being added — Node never picked up the change. Resolved by restarting the process manually. Not yet fixed at the tooling level (deliberately deferred, per explicit instruction) — `node --watch src/app.ts` would solve this without adding a dependency, same reasoning as the earlier `tsx` removal.
 
+## Step 7 & 8 — Auth middleware (`middleware/auth.middleware.ts`) and `/me` route
+
+- Middleware's first guard clause was inverted: `hasBearerToken` was actually computed as `true` when the token was *missing or malformed* (the name meant the opposite of what it held), and `if (!hasBearerToken)` therefore fired the `401` exactly when a **valid** `Bearer <token>` header was present — the happy path was unreachable; only accidentally still returned 401 for bad input, via the second guard clause catching what the first one let through. Fixed by renaming to `missingBearerToken` and using it directly (no double negative).
+- `startsWith('Bearer')` was missing the trailing space, so a header like `"Bearerxyz"` would pass the prefix check (still caught later by `jwt.verify` throwing on the garbage token, just via a less direct path). Fixed to `startsWith('Bearer ')`.
+- `express.d.ts`'s `Request.user` was typed `string | jwt.JwtPayload`, but only ever assigned a plain `string` (the decoded email) — narrowed to `user?: string` to match actual usage.
+- First `/me` implementation ignored `req.user` (the identity the middleware had already verified from the token) and instead read `email` from `req.body`, then did a fresh `getUserByEmail` lookup with that client-supplied value. This was a real authorization bug, not just a style issue: any request with *any* valid token could pass an arbitrary email in the body and receive that other user's data — the middleware only proved "you have a valid token," while the route then answered "whoever's email you typed," fully decoupled from whose token it was. Compounded by the DB-parsing middleware ordering bug below, which meant `req.body` was `undefined` in practice anyway. Fixed by using `req.user` directly with no DB round-trip — the middleware already verifies identity, `/me` only needs to echo it back.
+- `app.use(express.json())` and `app.use('/auth', authRouter)` were registered *after* `app.get('/me', ...)` in `app.ts`. Express applies middleware in registration order, so JSON body-parsing never ran before `/me`'s handler. Became moot once `/me` stopped depending on `req.body`, but worth remembering for any future route added before that line.
+- `/me`'s response is `res.status(200).json(req.user)` — a bare JSON string (e.g. `"test2@example.com"`), not an object like every other endpoint (`{ userId }`, `{ accessToken }`, `{ error }`). Deliberately left as-is: PLAN.md's checkpoint only requires "the decoded email" is returned, without specifying a shape. Noted here as a known inconsistency to reconsider if/when the SwiftUI client makes parsing a bare string awkward compared to the rest of the API.
+- Verified end-to-end (`verify.sh`): `register → 201`, `register again → 409`, `login → 200 + accessToken`, `/me` with token `→ 200` + email, `/me` without token `→ 401` — matches PLAN.md's Step 1 Definition of Done in full.
+
+## Incident — DynamoDB Local data loss on container restart
+
+- Mid-testing, `login` started returning `500` for a user that had previously registered successfully. Root cause: `docker-compose.yml` runs DynamoDB Local with `-inMemory`, so all data (including the `Users` table itself) is wiped on every container restart/recreation — the container had restarted at some point, the table no longer existed, and `GetCommand` almost certainly threw an uncaught `ResourceNotFoundException` that propagated up as an unhandled `500` rather than anything credential- or logic-related.
+- Resolved by re-running `db/create.users.table.ts` against the fresh container. No code fix needed — this is inherent to `-inMemory` mode, not a bug. Worth remembering as a recurring local-dev gotcha: after any `docker compose` restart, the table must be recreated before register/login will work again.
+
 ## Deliberately deferred (per PLAN.md)
 
 Not built yet — noting here per PLAN.md's instruction to record each conscious skip:
@@ -60,3 +75,21 @@ Not built yet — noting here per PLAN.md's instruction to record each conscious
 - Password reset flow
 - Rate limiting on login
 - Keychain storage (Step 2, iOS)
+
+## Enhancements — bottlenecks to address in the Express service
+
+Not blocking Step 1's checkpoints, but surfaced repeatedly during review and worth tackling before/during load testing and AWS deployment:
+
+- **No centralized error-handling.** Every route hand-rolls its own `try/catch` + `instanceof`/`.message` checks to map errors to status codes (`register`, `login` both do this independently). An Express error-handling middleware (`(err, req, res, next) => ...`, registered last) would let route handlers just `throw`/`next(err)` and centralize the error-to-status mapping in one place, removing the copy-pasted catch blocks and the repeated risk of the same class of bug (e.g. the `.name` vs `.message` mistake hit twice already).
+- **No dev-mode file watching.** `node src/app.ts` doesn't pick up code changes — already caused one false "404 Cannot POST" debugging detour. `node --watch src/app.ts` fixes this without adding a dependency (same reasoning as the earlier `tsx` removal).
+- **No graceful shutdown handling.** `SIGINT`/`SIGTERM` have no handler, so `Ctrl+C` always logs `pnpm`'s `ELIFECYCLE Command failed`. Harmless today; will matter once there are open connections/in-flight requests worth draining before exit (relevant once deployed behind an ALB with health checks).
+- **No build/compile step for deployment.** `tsconfig.json` has `noEmit: true` and the app runs via Node's native TS type-stripping directly from `src/`. That's fine locally, but AWS deployment (ECS Fargate, per PLAN.md Step 4) will need a decision: ship `.ts` source + a Node runtime new enough for type-stripping, or add an actual build step. Worth deciding deliberately rather than defaulting.
+- **No structured logging.** Everything is ad hoc `console.log`/`console.error`. Fine for a single local process; will get hard to correlate once there are concurrent requests or multiple ECS tasks.
+- **`/health` doesn't check DB connectivity** — it's a liveness check only, not a readiness check. Once deployed behind an ALB with health checks, a DynamoDB outage wouldn't be reflected in `/health`'s response.
+- **No automated tests.** Every checkpoint so far has been verified manually via `curl`/`verify.sh`. Fine for a single-developer learning exercise at this scale, but will not scale to catching regressions once load testing and deployment start changing things underneath the app.
+- **DynamoDB access pattern is single-purpose** (`getUserByEmail` only). Fine for Step 1's scope; PLAN.md already flags "expect DynamoDB access-pattern pain" as Step 3 — no action needed yet, just noting this is the first place that pain will likely surface.
+- **No CORS configuration.** Not needed for a native SwiftUI client, but will matter immediately if a browser-based client is ever added.
+
+## Roadmap update (superseding PLAN.md's original Step 2/3/4 ordering)
+
+- PLAN.md originally sequenced: SwiftUI client → local load testing → AWS deployment. Explicit decision made instead: **SwiftUI client → AWS deployment → SwiftUI client regression testing against the deployed API.** Load testing is deferred out of this sequence for now (not abandoned — PLAN.md's own rationale for pulling it earlier, "cheap lessons before AWS costs," still stands as a reason to revisit it before or during real traffic).

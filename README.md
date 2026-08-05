@@ -73,3 +73,29 @@ Keep-Alive: timeout=5
 
 {"status":"ok"}
 ```
+
+## Verifying the full auth flow
+
+With the app running (`pnpm run dev`) and DynamoDB Local up (`docker compose up -d`, table created via `node src/db/create.users.table.ts`), this sequence exercises the full register → login → `/me` chain (also captured in `verify.sh` for regression):
+
+```sh
+EMAIL="test2@example.com"
+PASSWORD="password123"
+
+# 1. register (expect 201)
+curl -i -X POST localhost:3000/auth/register -H "Content-Type: application/json" -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"
+
+# 2. register again with the same email (expect 409)
+curl -i -X POST localhost:3000/auth/register -H "Content-Type: application/json" -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"
+
+# 3. login (expect 200, accessToken)
+LOGIN_RESPONSE=$(curl -s -X POST localhost:3000/auth/login -H "Content-Type: application/json" -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")
+echo "$LOGIN_RESPONSE"
+TOKEN=$(echo "$LOGIN_RESPONSE" | sed -E 's/.*"accessToken":"([^"]+)".*/\1/')
+
+# 4. /me with token (expect 200, email)
+curl -i localhost:3000/me -H "Authorization: Bearer $TOKEN"
+
+# 5. /me without token (expect 401)
+curl -i localhost:3000/me
+```
