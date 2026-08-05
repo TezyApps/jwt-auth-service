@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import authRouter from './routes/auth.ts';
+import { authMiddleware } from './middleware/auth.middleware.ts';
 
 const app: Express = express();
 
@@ -16,6 +17,10 @@ app.get(
         );
     }
 );
+
+app.get('/me', authMiddleware, (req, res) => { 
+    res.status(200).json(req.user);
+});
 
 app.use(express.json());
 app.use('/auth', authRouter);
